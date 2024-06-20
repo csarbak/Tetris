@@ -1,198 +1,202 @@
+import pygame
 import random
-import time
-import curses
 
-# Terminal size
-WIDTH = 10
-HEIGHT = 20
+# Initialize Pygame
+pygame.init()
 
-# Tetromino shapes
-SHAPES = [
-    [
-        [1, 1, 1, 1],
-    ],
-    [
-        [1, 1],
-        [1, 1],
-    ],
-    [
-        [1, 1, 0],
-        [0, 1, 1],
-    ],
-    [
-        [0, 1, 1],
-        [1, 1, 0],
-    ],
-    [
-        [1, 1, 1],
-        [0, 1, 0],
-    ],
-    [
-        [1, 1, 1],
-        [1, 0, 0],
-    ],
-    [
-        [1, 1, 1],
-        [0, 0, 1],
-    ],
+# Set up the screen
+screen_width = 800
+screen_height = 600
+screen = pygame.display.set_mode((screen_width, screen_height))
+pygame.display.set_caption("Tetris")
+
+# Define colors
+BLACK = (0, 0, 0)
+WHITE = (255, 255, 255)
+CYAN = (0, 255, 255)
+YELLOW = (255, 255, 0)
+MAGENTA = (255, 0, 255)
+ORANGE = (255, 165, 0)
+BLUE = (0, 0, 255)
+GREEN = (0, 255, 0)
+RED = (255, 0, 0)
+
+# Define Tetris grid dimensions
+grid_width = 10
+grid_height = 20
+grid_size = 30
+
+# Define shapes and their colors
+tetrominoes = [
+    [[1, 1, 1, 1]],  # I
+    [[1, 1, 1], [0, 0, 1]],  # J
+    [[1, 1, 1], [1, 0, 0]],  # L
+    [[1, 1], [1, 1]],  # O
+    [[0, 1, 1], [1, 1, 0]],  # S
+    [[1, 1, 0], [0, 1, 1]],  # Z
+    [[1, 1, 1], [0, 1, 0]],  # T
 ]
+tetromino_colors = [CYAN, BLUE, ORANGE, YELLOW, GREEN, RED, MAGENTA]
+
+# Initialize the grid
+grid = [[0] * grid_width for _ in range(grid_height)]
 
 
-def create_board():
-    """
-    Create the game board with empty cells.
-    """
-    board = [["." for _ in range(WIDTH)] for _ in range(HEIGHT)]
-    return board
-
-
-def draw_board(stdscr, board, tetromino, x, y):
-    """
-    Draw the game board in the terminal.
-    """
-    for row in range(HEIGHT):
-        for col in range(WIDTH):
-            if (
-                row >= y
-                and row < y + len(tetromino)
-                and col >= x
-                and col < x + len(tetromino[0])
-            ):
-                cell = (
-                    tetromino[row - y][col - x]
-                    if tetromino[row - y][col - x]
-                    else board[row][col]
+def draw_grid():
+    for y in range(grid_height):
+        for x in range(grid_width):
+            pygame.draw.rect(
+                screen, WHITE, (x * grid_size, y * grid_size, grid_size, grid_size), 1
+            )
+            if grid[y][x] != 0:
+                pygame.draw.rect(
+                    screen,
+                    tetromino_colors[grid[y][x] - 1],
+                    (
+                        x * grid_size + 1,
+                        y * grid_size + 1,
+                        grid_size - 2,
+                        grid_size - 2,
+                    ),
                 )
-            else:
-                cell = board[row][col]
-            if cell == 1:
-                stdscr.addch(row, col, "#")
-            else:
-                stdscr.addch(row, col, str(cell))
 
 
-def check_collision(board, tetromino, x, y):
-    """
-    Check if a tetromino collides with the board or other tetrominos.
-    """
+def draw_tetromino(tetromino, x, y, tetromino_id):
     for row in range(len(tetromino)):
         for col in range(len(tetromino[row])):
-            if tetromino[row][col] and (
-                x + col < 0
-                or x + col >= WIDTH
-                or y + row >= HEIGHT
-                or board[y + row][x + col] != "."
-            ):
-                return True
+            if tetromino[row][col] == 1:
+                pygame.draw.rect(
+                    screen,
+                    tetromino_colors[tetromino_id - 1],
+                    (
+                        (x + col) * grid_size + 1,
+                        (y + row) * grid_size + 1,
+                        grid_size - 2,
+                        grid_size - 2,
+                    ),
+                )
+
+
+def check_collision(tetromino, x, y):
+    for row in range(len(tetromino)):
+        for col in range(len(tetromino[row])):
+            if tetromino[row][col] == 1:
+                if (
+                    x + col < 0
+                    or x + col >= grid_width
+                    or y + row >= grid_height
+                    or grid[y + row][x + col] != 0
+                ):
+                    return True
     return False
 
 
+def clear_rows():
+    rows_to_clear = []
+    for row in range(grid_height):
+        if all(grid[row]):
+            rows_to_clear.append(row)
+
+    for row in rows_to_clear:
+        del grid[row]
+        grid.insert(0, [0] * grid_width)
+
+
+def game_over():
+    pygame.quit()
+    quit()
+
+
 def rotate_tetromino(tetromino):
-    """
-    Rotate a tetromino 90 degrees clockwise.
-    """
     return list(zip(*reversed(tetromino)))
 
 
-def clear_rows(board):
-    """
-    Clear full rows from the board and shift the remaining rows down.
-    """
-    rows_cleared = 0
-    rows_to_clear = []
-    for row in range(len(board)):
-        if all(cell != "." for cell in board[row]):
-            rows_to_clear.append(row)
-    for row in rows_to_clear:
-        del board[row]
-        board.insert(0, ["." for _ in range(WIDTH)])
-        rows_cleared += 1
-    return rows_cleared
+def run_tetris():
+    clock = pygame.time.Clock()
 
+    tetromino_id = random.randint(1, len(tetrominoes))
+    tetromino_x = grid_width // 2 - len(tetrominoes[tetromino_id - 1][0]) // 2
+    tetromino_y = 0
 
-def main(stdscr):
-    for i in range(5):
-        print(f"get ready in {5-i} seconds\n")
-        time.sleep(1)
+    d = str(
+        input("Press H for hard E for easy and any key for medium diffulty: ")
+    )  # Delay in milliseconds
 
-    # Set up the game
-    curses.curs_set(0)
-    stdscr.nodelay(1)  # Enable non-blocking keyboard input
-    board = create_board()
-    tetromino = random.choice(SHAPES)
-    x, y = WIDTH // 2 - len(tetromino[0]) // 2, 0
-    score = 0
-    game_over = False
+    delay = 500
+    if d == "H":
+        delay = 250
+    if d == "E":
+        delay = 750
+    last_move_time = pygame.time.get_ticks()
 
-    # Timer variables
-    timer = 0
-    start_time = time.time()
+    game_over_flag = False
 
-    # Main game loop
-    while not game_over:
-        stdscr.clear()  # Clear the terminal
+    while not game_over_flag:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                game_over()
 
-        # Calculate elapsed time
-        elapsed_time = time.time() - start_time
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_LEFT:
+                    if not check_collision(
+                        tetrominoes[tetromino_id - 1], tetromino_x - 1, tetromino_y
+                    ):
+                        tetromino_x -= 1
 
-        # Move tetromino down automatically after 10 seconds
-        if elapsed_time >= 1 and not check_collision(board, tetromino, x, y + 1):
-            y += 1
-            start_time = time.time()  # Reset start time
+                elif event.key == pygame.K_RIGHT:
+                    if not check_collision(
+                        tetrominoes[tetromino_id - 1], tetromino_x + 1, tetromino_y
+                    ):
+                        tetromino_x += 1
 
-        if check_collision(board, tetromino, x, y + 1):
-            # Lock tetromino in place
-            for row in range(len(tetromino)):
-                for col in range(len(tetromino[row])):
-                    if tetromino[row][col]:
-                        board[y + row][x + col] = "#"
+                elif event.key == pygame.K_DOWN:
+                    while not check_collision(
+                        tetrominoes[tetromino_id - 1], tetromino_x, tetromino_y + 1
+                    ):
+                        tetromino_y += 1
 
-            # Clear full rows
-            rows_cleared = clear_rows(board)
-            score += rows_cleared * rows_cleared  # Increase score
+                elif event.key == pygame.K_UP:
+                    rotated_tetromino = rotate_tetromino(tetrominoes[tetromino_id - 1])
+                    if not check_collision(rotated_tetromino, tetromino_x, tetromino_y):
+                        tetrominoes[tetromino_id - 1] = rotated_tetromino
 
-            # Select a new tetromino
-            tetromino = random.choice(SHAPES)
-            x, y = WIDTH // 2 - len(tetromino[0]) // 2, 0
+        current_time = pygame.time.get_ticks()
+        if current_time - last_move_time > delay:
+            last_move_time = current_time
+            if not check_collision(
+                tetrominoes[tetromino_id - 1], tetromino_x, tetromino_y + 1
+            ):
+                tetromino_y += 1
+            else:
+                for row in range(len(tetrominoes[tetromino_id - 1])):
+                    for col in range(len(tetrominoes[tetromino_id - 1][row])):
+                        if tetrominoes[tetromino_id - 1][row][col] == 1:
+                            grid[tetromino_y + row][tetromino_x + col] = tetromino_id
 
-            # Check for game over
-            if check_collision(board, tetromino, x, y):
-                game_over = True
+                clear_rows()
 
-        # User input
-        key = stdscr.getch()
-        if key == ord("a") and not check_collision(board, tetromino, x - 1, y):
-            x -= 1
-        elif key == ord("d") and not check_collision(board, tetromino, x + 1, y):
-            x += 1
-        elif key == ord("s"):
-            if not check_collision(board, tetromino, x, y + 1):
-                y += 1
-            timer = 0
-        elif key == ord("q"):
-            game_over = True
-        elif key == ord("r"):
-            rotated_tetromino = rotate_tetromino(tetromino)
-            if not check_collision(board, rotated_tetromino, x, y):
-                tetromino = rotated_tetromino
+                tetromino_id = random.randint(1, len(tetrominoes))
+                tetromino_x = (
+                    grid_width // 2 - len(tetrominoes[tetromino_id - 1][0]) // 2
+                )
+                tetromino_y = 0
 
-        # Draw the board
-        draw_board(stdscr, board, tetromino, x, y)
-        stdscr.addstr(HEIGHT, 0, f"Score: {score}")
+                if check_collision(
+                    tetrominoes[tetromino_id - 1], tetromino_x, tetromino_y
+                ):
+                    game_over_flag = True
 
-        # Refresh the screen
-        stdscr.refresh()
+        screen.fill(BLACK)
+        draw_grid()
+        draw_tetromino(
+            tetrominoes[tetromino_id - 1], tetromino_x, tetromino_y, tetromino_id
+        )
+        pygame.display.update()
+        clock.tick(60)
 
-        # Increment timer
-        timer += 1
+    game_over()
 
-        # Slow down the game
-        time.sleep(0.1)
-
-    stdscr.addstr(HEIGHT + 2, 0, "Game Over")
-    stdscr.refresh()
-    stdscr.getch()
 
 
 if __name__ == "__main__":
-    curses.wrapper(main)
+    run_tetris()
